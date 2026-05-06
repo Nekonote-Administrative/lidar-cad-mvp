@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "PROJECT_SCOPE": "lidar-cad-mvp"
+  },
+  "permissions": {
+    "allow": [
+      "Read(**/*)",
+      "Glob(**/*)",
+      "Grep(**/*)",
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(npm ci:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run format:*)",
+      "Bash(npm run format:check:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run test:watch:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npx supabase:*)",
+      "Bash(supabase status:*)",
+      "Bash(supabase db diff:*)",
+      "Bash(supabase migration list:*)",
+      "Bash(vercel ls:*)",
+      "Bash(vercel inspect:*)",
+      "Bash(vercel env ls:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)"
+    ],
+    "deny": [
+      "Bash(supabase db reset:*)",
+      "Bash(supabase db push --linked:*)",
+      "Bash(vercel rm:*)",
+      "Bash(vercel remove:*)",
+      "Bash(vercel env rm:*)",
+      "Bash(gh repo delete:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/git-session-bootstrap.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/mode-context.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/adr-count-guard.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/git-main-edit-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/harness-edit-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/closing-flow-guard.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -c 'if (.tool_input.file_path // \"\" | test(\"/src/\")) then {\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"[frontend-verify reminder] src/ を編集しました。 セッション末 (commit-and-pr の前) に必ず frontend-verify skill を起動してください。 手順: (1) npm run typecheck (型チェック)、 (2) npm run lint (ESLint)、 (3) npm run format:check (Prettier)、 (4) npm test (Vitest)、 (5) npm run build (本番ビルド) — Phase 1 の Definition of Done に対応。 (6) UI 変更があれば npm run dev を起動して http://localhost:3000 で目視確認 → Ctrl+C で停止。 (7) commit-and-pr で PR 作成 (Vercel が PR ごとに preview を自動デプロイ、 main マージで本番反映)。\"}} else empty end' 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/track-skill-invoke.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
