@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LiDAR×AI 自動作図システム (店舗系許認可向け)
 
-## Getting Started
+風営法 1 号 / 深夜酒類提供飲食店の図面作成を AI 補助で自動化する Web SaaS。
+詳細な事業背景・設計判断は親フォルダの ADR (Google Drive 同期領域) を参照してください。
 
-First, run the development server:
+## Phase 1 完了時点の機能
+
+- ユーザー登録 / ログイン / サインアウト (Supabase Auth)
+- 保護ルート (Next.js 16 proxy.ts)
+- 空のダッシュボード
+
+## 開発環境セットアップ
+
+### 前提
+
+- Node.js 20+
+- npm
+- Supabase アカウント (https://supabase.com)
+- Vercel アカウント (https://vercel.com)
+
+### 初回セットアップ
 
 ```bash
+git clone <repo>
+cd lidar-cad-mvp
+npm install
+cp .env.example .env.local
+# .env.local を Supabase の値で書き換える
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ブラウザで http://localhost:3000 を開く。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## スクリプト
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev          # 開発サーバー起動 (http://localhost:3000)
+npm run build        # 本番ビルド
+npm run typecheck    # TypeScript 型チェック
+npm run lint         # ESLint
+npm run format       # Prettier フォーマット (書き換え)
+npm run format:check # Prettier フォーマットチェックのみ
+npm test             # Vitest テスト実行
+npm run test:watch   # Vitest watch モード
+```
 
-## Learn More
+## 技術スタック
 
-To learn more about Next.js, take a look at the following resources:
+| レイヤー | ライブラリ | ADR |
+|---|---|---|
+| FW | Next.js 16 App Router + TypeScript | 0005 |
+| UI | Tailwind CSS 4 | 0005 |
+| 認証 | Supabase Auth (`@supabase/ssr`) | 0005 |
+| テスト | Vitest + Testing Library | 0005 |
+| ホスティング | Vercel | 0005 |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## ディレクトリ構成
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/
+│   ├── (auth)/          認証画面 (route group)
+│   ├── dashboard/       認証必須エリア
+│   └── page.tsx         ランディング
+├── lib/
+│   └── supabase/        Supabase クライアントヘルパー
+└── proxy.ts             保護ルート判定 (Next.js 16 proxy 規約)
+```
 
-## Deploy on Vercel
+## 次のフェーズ
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Phase 2 で DXF パース + 求積エンジン (CLI) を実装。詳細は親プロジェクトの `docs/plans/00-roadmap.md` 参照。
