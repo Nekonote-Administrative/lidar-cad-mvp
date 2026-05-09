@@ -127,28 +127,75 @@ done
 
 ### Step 4.5: 隔離 worktree の解放 (ISOLATED モードのみ)
 
-ISOLATED モードでは、 マージ完了直後に **本セッション専用の worktree を解放**する (= ディスク上から消す + session marker を消す)。 これをしないと:
-- 後続の Step 6 で旧 branch を削除できない (worktree が掴んでいる扱い)
-- 別セッションで「同じ branch 名」 を再利用しようとした時に worktree path 衝突
-- session marker が残ると、 もし session が同じ id で再開された場合に存在しない worktree を指してしまう (SessionStart hook の sweep で回収はされるが、 即座に消す方が安全)
+ISOLATED モードでは、 マージ完了直後に **本セッション専用の worktree を解放**する。 ただし **cwd が worktree 配下にある場合は物理削除を遅延させる** (= 削除キューに登録だけして、 次回 SessionStart hook が拾って物理削除する)。
+
+#### なぜ削除を遅延させるのか (cwd 内側ケース)
+
+Claude Code 本体プロセスの cwd は subprocess から変更できない。 自セッションが「自分の cwd」 を物理削除すると次の症状が連鎖する:
+
+1. cwd 無効化 → 後続 Bash tool が毎回 `Working directory ... was deleted; shell cwd recovered to ...` を吐く
+2. MCP server 再起動時に cwd 由来の env var path 展開が壊れる (`Missing environment variables: _R%/` 等の path substitution 残骸)
+3. 同一ディレクトリで別セッションを起動しても即崩れる
+
+そのため、 cwd 配下の worktree は本セッションでは消さず、 削除キュー (= 後述の `PENDING` ファイル) に append だけする。 次回 Claude Code 起動時に `git-session-bootstrap.sh` がキューを拾って物理削除する。 cwd 外の worktree (= 過去セッションが起こした遅延分の継承や、 cwd を別場所に向けて起動したレアケース) は従来通り即時削除して構わない。
+
+PENDING ファイルは **必ず main repo 側** (= primary worktree) の `.claude/sessions/.worktrees-to-delete` に置く。 削除対象の worktree 配下に書くと、 worktree 物理削除と同時に PENDING 自身が消えて遅延処理が永久に走らない。 main repo 側 path は `git rev-parse --git-common-dir` の親ディレクトリで解決する (cwd が worktree 内でも main 側を指す)。
+
+#### 実装
 
 ```bash
-if [ "$MODE" = "ISOLATED" ]; then
-  # まず branch ref から worktree を切り離す
-  git -C "$REPO_ROOT" worktree remove "$WT" --force 2>/dev/null \
-    || rm -rf "$WT"
-  # 空になった親ディレクトリ (例: .claude/worktrees/feat/) を best-effort で削除
-  rmdir "$(dirname "$WT")" 2>/dev/null
+QUEUED="no"
 
-  # session marker を削除
-  rm -rf "$REPO_ROOT/.claude/sessions/$SESSION_ID" 2>/dev/null
+if [ "$MODE" = "ISOLATED" ]; then
+  # main repo (= primary worktree) のパスを cwd 非依存で解決
+  # 注意: --git-common-dir は worktree から呼ぶと "/path/to/main/.git" の
+  # 絶対パス (= 共有 .git) を返す。 --git-dir (= worktree 個別の
+  # "/path/to/main/.git/worktrees/<name>") と混同しない。 親 dir を取れば常に
+  # main repo の絶対パスになる。
+  GIT_COMMON_DIR="$(git -C "$WT" rev-parse --git-common-dir 2>/dev/null)"
+  MAIN_REPO=""
+  if [ -n "$GIT_COMMON_DIR" ]; then
+    MAIN_REPO="$(cd "$(dirname "$GIT_COMMON_DIR")" 2>/dev/null && pwd)"
+  fi
+  [ -z "$MAIN_REPO" ] && MAIN_REPO="$REPO_ROOT"
+
+  CWD="$(pwd)"
+  case "$CWD" in
+    "$WT"|"$WT"/*)
+      # cwd が WT 配下: 物理削除を遅延キューに登録 (PENDING は main repo 側に置く)
+      PENDING="$MAIN_REPO/.claude/sessions/.worktrees-to-delete"
+      mkdir -p "$(dirname "$PENDING")" 2>/dev/null
+      # 重複行は append しない (再 merge 時の二重登録防止)
+      if [ ! -f "$PENDING" ] || ! grep -Fxq "$WT" "$PENDING" 2>/dev/null; then
+        printf '%s\n' "$WT" >> "$PENDING"
+      fi
+      QUEUED="yes"
+      ;;
+    *)
+      # cwd が WT 配下でない: 従来通り即時物理削除
+      git -C "$REPO_ROOT" worktree remove "$WT" --force 2>/dev/null \
+        || rm -rf "$WT"
+      rmdir "$(dirname "$WT")" 2>/dev/null
+      ;;
+  esac
+
+  # session marker は両ケースとも今すぐ消して安全。
+  # marker は worktree path への参照を持つだけで、 worktree 本体とは独立管理。
+  # 即時削除ケースでは worktree が既に消えたので marker も整合のため削除。
+  # 遅延ケースでは marker が残っていると次回 bootstrap の SESSIONS sweep が
+  # 「marker あり / worktree あり」 と認識してしまい、 PENDING との二重管理になる。
+  # marker 先消しなら sweep が「marker なし」 で素通りし、 PENDING のみが
+  # 削除責務を持つ単純な状態になる。
+  rm -rf "$MAIN_REPO/.claude/sessions/$SESSION_ID" 2>/dev/null
 
   # 以降の git 操作は cwd (= main 側) を使う
   WT="$REPO_ROOT"
 fi
 ```
 
-**`git worktree remove --force` が失敗した場合**: 別プロセスが worktree 内のファイルを掴んでいるなど (まれ)。 `rm -rf "$WT"` でディレクトリだけ消し、 後で `git worktree prune` (SessionStart hook が走る次回) でリポメタを掃除させる。
+**`git worktree remove --force` が失敗した場合 (即時削除パス)**: 別プロセスが worktree 内のファイルを掴んでいるなど (まれ)。 `rm -rf "$WT"` でディレクトリだけ消し、 後で `git worktree prune` (SessionStart hook 次回) でリポメタを掃除させる。
+
+**遅延キューに積んだケースの始末**: 次回 Claude Code 起動時、 `git-session-bootstrap.sh` が `.worktrees-to-delete` を順に処理する: 各 path について、 (a) 自セッションの active_worktree なら次回に持ち越す (= 同 path で再起動した時の保険)、 (b) ディスク上に存在すれば `git worktree remove --force` または `rm -rf` で物理削除 + 親ディレクトリ rmdir、 (c) 全行処理が終わったら、 残行があれば PENDING を上書き、 無ければ PENDING ファイル自体を削除する。
 
 ### Step 5: ローカル main 同期
 
@@ -269,10 +316,13 @@ GitHub 上で **`mergedAt` が non-null (= マージ済確認できた時のみ)
 
 ### Step 7: ユーザー向けレポート (業務語彙)
 
-[CLAUDE.md ユーザー応答の語彙ルール](../../../CLAUDE.md) に従い、 ブランチ名 / commit hash / merge / rebase / squash 等の用語は出さない。
+[CLAUDE.md ユーザー応答の語彙ルール](../../../CLAUDE.md) に従い、 ブランチ名 / commit hash / merge / rebase / squash 等の用語は出さない。 文言は Step 4.5 の `QUEUED` フラグを参照して分岐する。
 
-**通常成功**:
+**通常成功 (即時物理削除に成功 = `QUEUED=no`)**:
 > 本番に反映しました。 古い作業場所も片付けたので、 次の作業からきれいな状態で始められます。
+
+**通常成功 (削除キューに登録 = `QUEUED=yes`)**:
+> 本番に反映しました。 今の作業場所は次回ツールを開いた時に自動で片付きます。
 
 **`--auto` 待機中**:
 > 自動チェック通過後に本番反映する予約をしました。 通過すれば自動で反映されます。 結果は次にツールを開いた時に取り込まれます。
@@ -310,6 +360,7 @@ GitHub 上で **`mergedAt` が non-null (= マージ済確認できた時のみ)
 - **`--delete-branch` がリモート削除に失敗** (権限不足等): GitHub auto-delete 設定がオンならいずれ消える。 オフなら 「リモートブランチが残っています」 と内部ログのみ (ユーザーへの通知は不要)
 - **main が別 worktree に掴まれている (LEGACY モード)**: Step 5b.2 の 3 番目のケース。 別 worktree で pull → 現在の worktree は detached HEAD で main commit に着地。 ユーザーへの説明は 「main と同じ位置」 で十分 (技術用語 `detached HEAD` は出さない)。 次タスク開始時に `git-task-start` skill が detached HEAD on main commit を **正常状態として処理する** (= 同 commit から新ブランチを切る)。 この前提は本 skill と git-task-start で対になっている。
 - **ISOLATED モードでの worktree 削除失敗**: `git worktree remove --force` が稀に失敗する (別プロセスが worktree 内のファイルを掴んでいる等)。 `rm -rf "$WT"` で物理削除し、 リポメタは次回 SessionStart hook が `git worktree prune` を介して掃除する
+- **cwd を含む worktree の削除遅延**: Claude Code 本体プロセスは subprocess から cwd を変更できないため、 自セッションが「自分の cwd」 を物理削除すると、 後続 Bash tool / MCP server / 同ディレクトリ別セッションが連鎖的に壊れる。 そのため Step 4.5 では cwd 配下の場合のみ削除キュー (`.claude/sessions/.worktrees-to-delete`) に登録するに留め、 物理削除は次回 SessionStart hook (`git-session-bootstrap.sh`) に委譲する。 cwd 外の場合は従来通り即時物理削除して構わない
 
 ## 制約
 

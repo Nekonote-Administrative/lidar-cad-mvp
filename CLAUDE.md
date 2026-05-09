@@ -59,9 +59,10 @@ main 直 push / commit 残置 / ブランチ残置でセッション終了は禁
 - **セッション間隔離 (worktree)**: 各 Claude Code セッションは `git-task-start` で **自分専用の隔離 worktree** (`.claude/worktrees/<branch>/`) を持つ。 セッション ↔ worktree マッピングは `.claude/sessions/<session_id>/wt.json` に記録。 これにより複数セッション同時利用でブランチが裏で切り替わる事故を防ぐ
 - **cwd は変えない / 変えられない**: Claude Code の cwd は不変。 worktree 内での編集は `$WT/...` 絶対パス、 build / git 操作は `( cd "$WT/..." && ... )` / `git -C "$WT" ...` を使う
 - **main 直接編集禁止 + worktree 外編集禁止**: PreToolUse hook (`.claude/hooks/git-main-edit-guard.sh`) が両方を deny。 deny されたら silent に `git-task-start` で新ブランチ + worktree 作成
-- **PR マージ**: `pr-merge-and-cleanup` 経由のみ。 マージ後は worktree + session marker も自動掃除
+- **PR マージ**: `pr-merge-and-cleanup` 経由のみ。 マージ後は worktree + session marker も自動掃除 (cwd 内側ケースは遅延キュー経由で次回 SessionStart hook が削除)
 - **ブランチ削除**: `git worktree list` で他セッション利用チェック後に silent 削除
-- **SessionStart hook** (`.claude/hooks/git-session-bootstrap.sh`) が origin fetch + main 最新性 + session_id + active worktree を context に注入し、 安全なら自動 fast-forward + orphan marker 掃除 + `git worktree prune`
+- **SessionStart hook** (`.claude/hooks/git-session-bootstrap.sh`) が origin fetch + main 最新性 + session_id + active worktree を context に注入し、 安全なら自動 fast-forward + orphan marker 掃除 + `git worktree prune` + 削除キュー (`.worktrees-to-delete`) 処理
+- **cwd を含む dir を消す hook/skill は遅延キュー + 親 PWD ガード二重保護**: subprocess は親 cwd を変更できない。 自プロセス cwd を含む dir を物理削除すると後続 Bash の cwd recovery / MCP server env path 展開 (`Missing environment variables: _R%/`) / 同 dir 別セッション起動が連鎖崩壊する。 削除側は (1) cwd 内側なら main repo 配下の削除キュー (`$MAIN_REPO/.claude/sessions/.worktrees-to-delete`) に append、 cwd 外側なら即時削除、 (2) キュー消化側 (= 次回 SessionStart hook) は active session marker と親プロセス PWD env (`cd` 前に捕捉) の両方で対象を保護する。 marker ベース保護だけだと session_id 交替で抜けるので PWD ベースが必須
 - **GitHub 前提**: Settings → Pull Requests → 「Automatically delete head branches」 ON
 
 ### ハーネス本体保護系の PreToolUse hook 設計指針

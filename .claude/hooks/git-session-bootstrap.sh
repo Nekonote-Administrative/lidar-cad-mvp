@@ -22,6 +22,22 @@ fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && exit 0
+# Capture parent process cwd BEFORE we cd. This is Claude Code's own cwd
+# (inherited via PWD env). We use it later in PENDING processing to refuse
+# deleting any worktree the parent is currently sitting in -- the same bug
+# class this whole queue exists to avoid.
+ORIG_PWD="${PWD:-$(pwd)}"
+# Resolve the MAIN repo (= primary worktree) path, regardless of whether cwd
+# happens to be inside a linked worktree. git-common-dir returns the shared
+# .git for any worktree; its parent is the main repo. We use this to anchor
+# the deletion queue file so it survives even when the queued worktree (and
+# its local .claude/sessions/) is itself deleted.
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
+MAIN_REPO=""
+if [ -n "$GIT_COMMON_DIR" ]; then
+  MAIN_REPO="$(cd "$(dirname "$GIT_COMMON_DIR")" 2>/dev/null && pwd)"
+fi
+[ -z "$MAIN_REPO" ] && MAIN_REPO="$REPO_ROOT"
 cd "$REPO_ROOT" || exit 0
 
 SESSION_ID=""
@@ -128,6 +144,49 @@ if [ -n "$SESSION_ID" ] && command -v jq >/dev/null 2>&1; then
     if [ -n "$ACTIVE_WT" ] && [ ! -d "$ACTIVE_WT" ]; then
       ACTIVE_WT=""
     fi
+  fi
+fi
+
+# Process deferred worktree deletion queue. Worktrees that contained the cwd
+# of a previous session can't be deleted by that session (Claude Code
+# subprocesses can't change the parent process cwd; deleting cwd corrupts MCP
+# server state and triggers shell cwd recovery on every subsequent command).
+# Instead, the previous session appended the path to .worktrees-to-delete and
+# we process it here from a fresh process whose cwd is the repo root.
+PENDING="$MAIN_REPO/.claude/sessions/.worktrees-to-delete"
+if [ -f "$PENDING" ]; then
+  REMAIN=""
+  wt_path=""
+  while IFS= read -r wt_path || [ -n "$wt_path" ]; do
+    [ -z "$wt_path" ] && continue
+    # If this happens to be the current session's active_worktree (same id
+    # restarted at same path -- defensive), keep it for next time.
+    if [ -n "$ACTIVE_WT" ] && [ "$wt_path" = "$ACTIVE_WT" ]; then
+      REMAIN="${REMAIN}${wt_path}"$'\n'
+      continue
+    fi
+    # Stronger guard: refuse to delete any worktree that contains the parent
+    # process cwd, regardless of session id. This catches the case where the
+    # user restarts Claude Code in the same worktree directory with a fresh
+    # session id -- the active_worktree marker check above would miss it.
+    if [ -n "$ORIG_PWD" ]; then
+      case "$ORIG_PWD" in
+        "$wt_path"|"$wt_path"/*)
+          REMAIN="${REMAIN}${wt_path}"$'\n'
+          continue
+          ;;
+      esac
+    fi
+    if [ -d "$wt_path" ]; then
+      git -C "$REPO_ROOT" worktree remove "$wt_path" --force 2>/dev/null \
+        || rm -rf "$wt_path"
+      rmdir "$(dirname "$wt_path")" 2>/dev/null
+    fi
+  done < "$PENDING"
+  if [ -n "$REMAIN" ]; then
+    printf '%s' "$REMAIN" > "$PENDING"
+  else
+    rm -f "$PENDING"
   fi
 fi
 
