@@ -62,3 +62,7 @@ client_secret*.json
 .claude/worktrees/
 .claude/sessions/
 .claude/settings.local.json
+
+# Subagent-driven-development scratch space (per-session, not committed)
+.agents/
+.codex/
