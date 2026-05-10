@@ -33,9 +33,9 @@ export function AreaTablePanel() {
 
   if (summary.kind === 'empty') {
     return (
-      <aside className="w-80 rounded border border-gray-200 p-4">
+      <aside className="w-80 rounded border border-gray-200 p-4 dark:border-gray-700">
         <h2 className="mb-2 text-lg font-bold">求積表</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           ゾーンが未設定です。 キャンバスでドラッグして追加してください。
         </p>
       </aside>
@@ -44,8 +44,8 @@ export function AreaTablePanel() {
 
   if (summary.kind === 'error') {
     return (
-      <aside className="w-80 rounded border border-red-300 bg-red-50 p-4">
-        <h2 className="mb-2 text-lg font-bold text-red-700">整合性エラー</h2>
+      <aside className="w-80 rounded border border-red-300 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/40">
+        <h2 className="mb-2 text-lg font-bold text-red-700 dark:text-red-400">整合性エラー</h2>
         <p className="text-sm">{summary.message}</p>
       </aside>
     )
@@ -61,7 +61,7 @@ export function AreaTablePanel() {
   }
 
   return (
-    <aside className="w-80 rounded border border-gray-200 p-4">
+    <aside className="w-80 rounded border border-gray-200 p-4 dark:border-gray-700">
       <h2 className="mb-2 text-lg font-bold">求積表</h2>
       <ul className="mb-4 space-y-1 text-sm">
         {TYPES.map((t) => (
@@ -73,7 +73,7 @@ export function AreaTablePanel() {
       </ul>
       <h3 className="mb-2 text-sm font-bold">個別ゾーン</h3>
       {zones.length === 0 ? (
-        <p className="text-sm text-gray-500">なし</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">なし</p>
       ) : (
         <ul className="space-y-2">
           {zones.map((z) => {
@@ -87,7 +87,7 @@ export function AreaTablePanel() {
                 <button
                   type="button"
                   onClick={() => removeZone(z.id)}
-                  className="text-xs text-red-600 hover:underline"
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
                 >
                   削除
                 </button>

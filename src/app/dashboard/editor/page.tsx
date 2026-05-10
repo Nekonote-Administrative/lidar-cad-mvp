@@ -8,7 +8,9 @@ import { AreaTablePanel } from '@/components/editor/AreaTablePanel'
 
 const DxfCanvas = dynamic(() => import('@/components/editor/DxfCanvas').then((m) => m.DxfCanvas), {
   ssr: false,
-  loading: () => <p className="text-sm text-gray-500">キャンバスを読み込み中...</p>,
+  loading: () => (
+    <p className="text-sm text-gray-500 dark:text-gray-400">キャンバスを読み込み中...</p>
+  ),
 })
 
 export default function EditorPage() {
@@ -31,7 +33,7 @@ export default function EditorPage() {
         <button
           type="button"
           onClick={reset}
-          className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+          className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-800"
         >
           別の DXF を読み込む
         </button>

@@ -1,10 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Stage, Layer, Line, Rect } from 'react-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useEditorStore } from '@/lib/editor/store'
 import { ZONE_COLORS } from '@/lib/editor/types'
+
+function useCanvasTheme() {
+  const [colors, setColors] = useState({ wall: '#111827', border: '#e5e7eb' })
+  useEffect(() => {
+    function read() {
+      const cs = getComputedStyle(document.documentElement)
+      setColors({
+        wall: cs.getPropertyValue('--color-canvas-wall').trim() || '#111827',
+        border: cs.getPropertyValue('--color-canvas-border').trim() || '#e5e7eb',
+      })
+    }
+    read()
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => read()
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return colors
+}
 
 const CANVAS_PADDING = 40
 const CANVAS_W = 800
@@ -40,6 +59,7 @@ export function DxfCanvas() {
   const currentZoneType = useEditorStore((s) => s.currentZoneType)
   const tx = useFitTransform()
   const [drag, setDrag] = useState<DragState | null>(null)
+  const theme = useCanvasTheme()
 
   if (!dxf || !tx) return null
 
@@ -84,14 +104,14 @@ export function DxfCanvas() {
     <Stage
       width={CANVAS_W}
       height={CANVAS_H}
-      className="cursor-crosshair border border-gray-200"
+      className="cursor-crosshair border border-gray-200 dark:border-gray-700"
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
     >
       <Layer>
         {/* 壁ポリライン (closed) */}
-        <Line points={wallPoints} closed stroke="#111827" strokeWidth={2} />
+        <Line points={wallPoints} closed stroke={theme.wall} strokeWidth={2} />
         {/* ゾーン (Phase 3 は矩形のみ) */}
         {zones.map((zone) => {
           const minX = Math.min(zone.rect.x1, zone.rect.x2)
