@@ -30,8 +30,8 @@ export function DxfDropzone() {
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed border-gray-300 p-8 hover:border-blue-500">
-        <span className="text-sm text-gray-600">
+      <label className="flex cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed border-gray-300 p-8 hover:border-blue-500 dark:border-gray-600 dark:hover:border-blue-400">
+        <span className="text-sm text-gray-600 dark:text-gray-300">
           DXF ファイルを選択 (Polycam Room Capture が出力した DXF)
         </span>
         <input
@@ -44,8 +44,12 @@ export function DxfDropzone() {
           }}
         />
       </label>
-      {pending && <p className="text-sm text-gray-500">読み込み中...</p>}
-      {error && <p className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {pending && <p className="text-sm text-gray-500 dark:text-gray-400">読み込み中...</p>}
+      {error && (
+        <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

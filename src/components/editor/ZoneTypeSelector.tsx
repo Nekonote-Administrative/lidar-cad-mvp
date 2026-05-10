@@ -16,7 +16,7 @@ export function ZoneTypeSelector() {
           type="button"
           onClick={() => set(t)}
           className={`rounded border px-3 py-1 text-sm ${
-            current === t ? 'border-2 font-bold' : 'border-gray-300'
+            current === t ? 'border-2 font-bold' : 'border-gray-300 dark:border-gray-600'
           }`}
           style={{
             color: ZONE_COLORS[t],
