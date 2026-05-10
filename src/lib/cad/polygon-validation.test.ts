@@ -26,7 +26,12 @@ describe('validatePolygonOrThrow', () => {
   })
 
   it('throws on a polygon with fewer than 3 points', () => {
-    expect(() => validatePolygonOrThrow([{ x: 0, y: 0 }, { x: 1, y: 1 }])).toThrow(/at least 3/i)
+    expect(() =>
+      validatePolygonOrThrow([
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ]),
+    ).toThrow(/at least 3/i)
   })
 
   it('throws on a polygon with duplicated consecutive points', () => {

@@ -54,6 +54,11 @@ describe('triangulate', () => {
   })
 
   it('throws on polygons with fewer than 3 points', () => {
-    expect(() => triangulate([{ x: 0, y: 0 }, { x: 1, y: 1 }])).toThrow()
+    expect(() =>
+      triangulate([
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ]),
+    ).toThrow()
   })
 })
