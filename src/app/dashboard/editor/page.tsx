@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useEditorStore } from '@/lib/editor/store'
 import { DxfDropzone } from '@/components/editor/DxfDropzone'
 import { ZoneTypeSelector } from '@/components/editor/ZoneTypeSelector'
+import { AreaTablePanel } from '@/components/editor/AreaTablePanel'
 
 const DxfCanvas = dynamic(() => import('@/components/editor/DxfCanvas').then((m) => m.DxfCanvas), {
   ssr: false,
@@ -35,8 +36,13 @@ export default function EditorPage() {
           別の DXF を読み込む
         </button>
       </div>
-      <ZoneTypeSelector />
-      <DxfCanvas />
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <ZoneTypeSelector />
+          <DxfCanvas />
+        </div>
+        <AreaTablePanel />
+      </div>
     </main>
   )
 }
