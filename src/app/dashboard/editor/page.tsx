@@ -1,7 +1,13 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useEditorStore } from '@/lib/editor/store'
 import { DxfDropzone } from '@/components/editor/DxfDropzone'
+
+const DxfCanvas = dynamic(() => import('@/components/editor/DxfCanvas').then((m) => m.DxfCanvas), {
+  ssr: false,
+  loading: () => <p className="text-sm text-gray-500">キャンバスを読み込み中...</p>,
+})
 
 export default function EditorPage() {
   const dxf = useEditorStore((s) => s.dxf)
@@ -28,10 +34,7 @@ export default function EditorPage() {
           別の DXF を読み込む
         </button>
       </div>
-      <p className="text-gray-600">
-        DXF を読み込みました ({dxf.walls.length} 点の壁を検出)。 キャンバス描画は Task 6
-        で実装予定。
-      </p>
+      <DxfCanvas />
     </main>
   )
 }
