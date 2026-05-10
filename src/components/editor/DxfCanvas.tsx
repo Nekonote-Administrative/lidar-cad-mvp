@@ -1,12 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import { Stage, Layer, Line, Rect } from 'react-konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import { useEditorStore } from '@/lib/editor/store'
 import { ZONE_COLORS } from '@/lib/editor/types'
 
 const CANVAS_PADDING = 40
 const CANVAS_W = 800
 const CANVAS_H = 600
+const MIN_ZONE_SIZE_MM = 100 // ドラッグ最小サイズ (mm)
 
 type FitTransform = { scale: number; offsetX: number; offsetY: number }
 
@@ -23,10 +26,21 @@ function useFitTransform(): FitTransform | null {
   return { scale, offsetX, offsetY }
 }
 
+type DragState = {
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+}
+
 export function DxfCanvas() {
   const dxf = useEditorStore((s) => s.dxf)
   const zones = useEditorStore((s) => s.zones)
+  const addZone = useEditorStore((s) => s.addZone)
+  const currentZoneType = useEditorStore((s) => s.currentZoneType)
   const tx = useFitTransform()
+  const [drag, setDrag] = useState<DragState | null>(null)
+
   if (!dxf || !tx) return null
 
   const wallPoints = dxf.walls.flatMap((p) => [
@@ -34,8 +48,47 @@ export function DxfCanvas() {
     p.y * tx.scale + tx.offsetY,
   ])
 
+  const canvasToMm = (px: number, py: number) => ({
+    x: (px - tx.offsetX) / tx.scale,
+    y: (py - tx.offsetY) / tx.scale,
+  })
+
+  const onMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+    const pos = e.target.getStage()?.getPointerPosition()
+    if (!pos) return
+    setDrag({ startX: pos.x, startY: pos.y, endX: pos.x, endY: pos.y })
+  }
+  const onMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+    if (!drag) return
+    const pos = e.target.getStage()?.getPointerPosition()
+    if (!pos) return
+    setDrag({ ...drag, endX: pos.x, endY: pos.y })
+  }
+  const onMouseUp = () => {
+    if (!drag) return
+    const a = canvasToMm(drag.startX, drag.startY)
+    const b = canvasToMm(drag.endX, drag.endY)
+    const w = Math.abs(b.x - a.x)
+    const h = Math.abs(b.y - a.y)
+    if (w >= MIN_ZONE_SIZE_MM && h >= MIN_ZONE_SIZE_MM) {
+      addZone({
+        id: `zone-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: currentZoneType,
+        rect: { x1: a.x, y1: a.y, x2: b.x, y2: b.y },
+      })
+    }
+    setDrag(null)
+  }
+
   return (
-    <Stage width={CANVAS_W} height={CANVAS_H} className="border border-gray-200">
+    <Stage
+      width={CANVAS_W}
+      height={CANVAS_H}
+      className="cursor-crosshair border border-gray-200"
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+    >
       <Layer>
         {/* 壁ポリライン (closed) */}
         <Line points={wallPoints} closed stroke="#111827" strokeWidth={2} />
@@ -59,6 +112,20 @@ export function DxfCanvas() {
             />
           )
         })}
+        {/* ドラッグ中プレビュー (現在の zone type 色) */}
+        {drag && (
+          <Rect
+            x={Math.min(drag.startX, drag.endX)}
+            y={Math.min(drag.startY, drag.endY)}
+            width={Math.abs(drag.endX - drag.startX)}
+            height={Math.abs(drag.endY - drag.startY)}
+            fill={ZONE_COLORS[currentZoneType]}
+            opacity={0.2}
+            dash={[6, 4]}
+            stroke={ZONE_COLORS[currentZoneType]}
+            strokeWidth={1}
+          />
+        )}
       </Layer>
     </Stage>
   )
