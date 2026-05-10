@@ -29,6 +29,26 @@ npm run cad:parse -- tests/fixtures/synthetic-rectangle-room.dxf --zone 客室
 
 ライブラリは **環境非依存** (Node でも Browser でも動く)。 `src/lib/cad/` 内には Konva / Next / Supabase / Node `fs` の import を **絶対に持ち込まない**。 IO は `src/cli/parse-dxf.ts` (CLI 層) で行う。
 
+## Phase 3 完了時点の機能 (Web エディタ)
+
+ブラウザで Polycam DXF を選択 → Konva.js キャンバスに壁が描画 → 矩形ドラッグでゾーン (営業所青/客室赤/調理場緑) を指定 → ゾーン三斜分割 + 求積表 (タイプ別合計 + 個別ゾーン m²) がサイドパネルに表示される動くデモ。
+
+- 起動: `npm run dev` → `http://localhost:3000` → ログイン後 `/dashboard` → 「新しい図面を編集する」 → DXF を選択 (例: `tests/fixtures/synthetic-rectangle-room.dxf`)
+- ゾーン作成: ゾーンタイプを選択 → キャンバス上でドラッグ (100mm 以上で確定)
+- ゾーン削除: サイドパネルの「削除」 ボタン
+- 永続化: なし (ブラウザリロードで状態消える、 Phase 5 で Supabase に永続化予定)
+- ゾーン形状: 矩形のみ (自由多角形は Phase 4 前段)
+
+主な追加 (`src/lib/editor/` + `src/components/editor/`):
+
+- `useEditorStore` — Zustand store (dxf / bbox / zones / currentZoneType)
+- `computeZoneAreaTable(zone)` — ゾーン → 求積表 (Phase 2 lib をラップ)
+- `aggregateZoneAreas(zones)` — タイプ別集計
+- `<DxfDropzone>` — DXF ファイル選択 + パース
+- `<DxfCanvas>` — Konva ベースの壁描画 + ゾーン表示 + ドラッグ作成
+- `<ZoneTypeSelector>` — 営業所/客室/調理場 切替
+- `<AreaTablePanel>` — 求積表サイドパネル + 削除
+
 ## 開発環境セットアップ
 
 ### 前提
@@ -72,6 +92,8 @@ npm run cad:parse    # Phase 2 CLI: Polycam DXF → 求積表 JSON
 | FW | Next.js 16 App Router + TypeScript | 0005 |
 | UI | Tailwind CSS 4 | 0005 |
 | 認証 | Supabase Auth (`@supabase/ssr`) | 0005 |
+| 2D 描画 | Konva.js + react-konva | 0005 |
+| 状態管理 | Zustand | 0005 |
 | DXF パース | `dxf-parser` | 0005 |
 | 三斜分割 | `earcut` (Mapbox) | 0005 |
 | 多角形演算 | `polygon-clipping` | 0005 |
@@ -84,13 +106,21 @@ npm run cad:parse    # Phase 2 CLI: Polycam DXF → 求積表 JSON
 ```
 src/
 ├── app/
-│   ├── (auth)/          認証画面 (route group)
-│   ├── dashboard/       認証必須エリア
-│   └── page.tsx         ランディング
+│   ├── (auth)/                   認証画面 (route group)
+│   ├── dashboard/
+│   │   ├── editor/page.tsx       Phase 3 Web エディタ
+│   │   └── page.tsx              ダッシュボード起点
+│   └── page.tsx                  ランディング
 ├── cli/
-│   └── parse-dxf.ts     Phase 2 CLI エントリ
+│   └── parse-dxf.ts              Phase 2 CLI エントリ
+├── components/
+│   └── editor/                   Phase 3 エディタ用 Client Components
+│       ├── DxfDropzone.tsx
+│       ├── DxfCanvas.tsx         (Konva, dynamic import + ssr:false)
+│       ├── ZoneTypeSelector.tsx
+│       └── AreaTablePanel.tsx
 ├── lib/
-│   ├── cad/             Phase 2 CAD 純粋ライブラリ (環境非依存)
+│   ├── cad/                      Phase 2 CAD 純粋ライブラリ (環境非依存)
 │   │   ├── types.ts
 │   │   ├── truncate.ts
 │   │   ├── polygon-validation.ts
@@ -99,12 +129,16 @@ src/
 │   │   ├── area-calc.ts
 │   │   ├── area-integrity.ts
 │   │   └── dxf-parser.ts
-│   └── supabase/        Supabase クライアントヘルパー
-└── proxy.ts             保護ルート判定 (Next.js 16 proxy 規約)
+│   ├── editor/                   Phase 3 エディタ純粋層 (Zustand store + zone-area)
+│   │   ├── types.ts
+│   │   ├── store.ts
+│   │   └── zone-area.ts
+│   └── supabase/                 Supabase クライアントヘルパー
+└── proxy.ts                      保護ルート判定 (Next.js 16 proxy 規約)
 tests/
-└── fixtures/            合成 DXF (Polycam フォーマット仕様に基づく手書き)
+└── fixtures/                     合成 DXF (Polycam フォーマット仕様に基づく手書き)
 ```
 
 ## 次のフェーズ
 
-Phase 3 で Web エディタ UI (Konva.js キャンバス + DXF アップロード + ゾーン手動指定 + 求積表表示) を実装。 Phase 2 の `src/lib/cad/` を Phase 3 がそのまま import して使う。 詳細は親プロジェクトの `docs/plans/00-roadmap.md` 参照。
+Phase 4 で PDF 出力 + 整合性バリデータの UI 統合 + 寸法補正 + 柱の手動配置を実装予定。 Phase 5 で Supabase 永続化 + 課金。 詳細は親プロジェクトの `docs/plans/00-roadmap.md` 参照。
