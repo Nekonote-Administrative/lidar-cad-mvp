@@ -16,7 +16,10 @@
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.3",
+    "dxf-parser": "^1.1.2",
+    "earcut": "^3.0.2",
     "next": "16.2.4",
+    "polygon-clipping": "^0.15.7",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -26,6 +29,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/earcut": "^3.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -36,6 +40,7 @@
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.5"
