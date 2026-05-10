@@ -3,6 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --color-canvas-wall: #111827;
+  --color-canvas-border: #e5e7eb;
 }
 
 @theme inline {
@@ -16,6 +18,8 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --color-canvas-wall: #f3f4f6;
+    --color-canvas-border: #374151;
   }
 }
 
